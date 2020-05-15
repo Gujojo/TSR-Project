@@ -52,8 +52,8 @@ modelPath = "..\\task1\\model.pickle"
 predPath = "..\\..\\data\\Classification\\Data\\pred.json"
 
 # 标志位
-extracted = 1
-trained = 1
+extracted = 0
+trained = 0
 
 orientations = 9
 pixels_per_cell = [8, 8]
