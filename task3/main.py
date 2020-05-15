@@ -69,11 +69,13 @@ if not extracted:
         os.mkdir(hogTrainPath)
 
     dirs = os.listdir(trainPath)
+    index = np.zeros(len(dirs))
+    cnt = 0
     for d in dirs:
         classPath = os.path.join(trainPath, d)
         images = os.listdir(classPath)
-        cnt = 0
-        image = images[0]
+        index[cnt] = np.random.randint(0, len(images)-1)
+        image = images[int(index[cnt])]
         imagePath = os.path.join(classPath, image)
         pic = io.imread(imagePath, as_gray=True)
         pic = transform.resize(pic, (64, 64))
@@ -83,9 +85,9 @@ if not extracted:
                          block_norm='L2',
                          feature_vector=True)
         Hog = hogFeature
-        cnt += 1
         featurePath = os.path.join(hogTrainPath, d)
         np.save(featurePath, Hog)
+        cnt += 1
     print("Successfully Extract HOG features to " + hogTrainPath)
 
 # 读取hog特征并开始训练
@@ -113,8 +115,8 @@ if not trained:
         pickle.dump(clf, outFile)
     print("Trained model is saved to " + modelPath)
 else:
-    with open(modelPath, 'rb') as inFile:
-        clf = pickle.load(inFile)
+    # with open(modelPath, 'rb') as inFile:
+    #     clf = pickle.load(inFile)
     clf = np.load(modelPath, allow_pickle=True)
     print("Successfully load model from " + modelPath)
 
@@ -131,7 +133,7 @@ for d in dirs:
     images = os.listdir(classPath)
     cnt = 0
     for image in images:
-        if cnt != 0:
+        if cnt != index[count]:
             imagePath = os.path.join(classPath, image)
             pic = io.imread(imagePath, as_gray=True)
             pic = transform.resize(pic, (64, 64))
@@ -151,6 +153,7 @@ for d in dirs:
                 yPred = np.append(yPred, tmp)
         cnt += 1
     count += 1
+    # print(d)
 np.save(os.path.join(hogTestPath, "test"), xTest)
 
 print("Number of tests: ", xTest.shape[0])

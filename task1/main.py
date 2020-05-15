@@ -7,7 +7,7 @@ from skimage.feature import hog
 from skimage import io
 from skimage import transform
 
-from sklearn.svm import SVC
+from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import KFold
 
 
@@ -22,11 +22,10 @@ def CrossValidation(xTrain, yTrain):
         np.random.set_state(state)
         np.random.shuffle(yTrain)
         kf = KFold(n_splits=nSplit)
-        cnt = 0
         for train_index, test_index in kf.split(xTrain):
             x_train, x_test = xTrain[train_index], xTrain[test_index]
             y_train, y_test = yTrain[train_index], yTrain[test_index]
-            clf = SVC()
+            clf = RandomForestClassifier(n_estimators=200, n_jobs=-1)
             clf.fit(x_train, y_train)
 
             yPredict = clf.predict(x_train)
@@ -57,11 +56,13 @@ extracted = 1
 trained = 1
 
 orientations = 9
-pixels_per_cell = (8, 8)
-cells_per_block = (8, 8)
+pixels_per_cell = [8, 8]
+cells_per_block = [8, 8]
+picSize = np.multiply(pixels_per_cell, cells_per_block)
 hogLength = orientations * cells_per_block[0] * cells_per_block[1]
-classList = ['i2', 'i4', 'i5', 'io', 'ip', 'p11', 'p23', 'p26', 'p5', 'pl30',
-             'pl40', 'pl5', 'pl50', 'pl60', 'pl80', 'pn', 'pne', 'po', 'w57']
+# classList = ['i2', 'i4', 'i5', 'io', 'ip', 'p11', 'p23', 'p26', 'p5', 'pl30',
+#              'pl40', 'pl5', 'pl50', 'pl60', 'pl80', 'pn', 'pne', 'po', 'w57']
+classList = os.listdir(trainPath)
 
 # 提取hog特征
 if not extracted:
@@ -77,7 +78,7 @@ if not extracted:
         for image in images:
             imagePath = os.path.join(classPath, image)
             pic = io.imread(imagePath, as_gray=True)
-            pic = transform.resize(pic, (64, 64))
+            pic = transform.resize(pic, picSize)
             hogFeature = hog(pic, orientations=orientations,
                              pixels_per_cell=pixels_per_cell,
                              cells_per_block=cells_per_block,
@@ -107,14 +108,17 @@ if not trained:
             yTrain = np.append(yTrain, yTmp)
         cnt += 1
     print("Number of samples: ", xTrain.shape[0])
-    clf = SVC()
+    clf = RandomForestClassifier(n_estimators=200, n_jobs=-1)
     clf.fit(xTrain, yTrain)
     with open(modelPath, 'wb') as outFile:
         pickle.dump(clf, outFile)
     print("Trained model is saved to " + modelPath)
+
+    CrossValidation(xTrain, yTrain)
+
 else:
-    with open(modelPath, 'rb') as inFile:
-        clf = pickle.load(inFile)
+    # with open(modelPath, 'rb') as inFile:
+    #     clf = pickle.load(inFile)
     clf = np.load(modelPath, allow_pickle=True)
     print("Successfully load model from " + modelPath)
 
@@ -126,7 +130,7 @@ cnt = 0
 for image in images:
     imagePath = os.path.join(testPath, image)
     pic = io.imread(imagePath, as_gray=True)
-    pic = transform.resize(pic, (64, 64))
+    pic = transform.resize(pic, picSize)
     hogFeature = hog(pic, orientations=orientations,
                      pixels_per_cell=pixels_per_cell,
                      cells_per_block=cells_per_block,
@@ -143,11 +147,5 @@ print("Successfully Extract HOG features to " + hogTestPath)
 with open(predPath, 'w') as outFile:
     json.dump(yPred, outFile)
 print("Save predictions to " + predPath)
-
-
-# CrossValidation(xTrain, yTrain)
-
-
-
 
 
