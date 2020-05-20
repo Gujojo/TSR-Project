@@ -1,170 +1,169 @@
-import os
+import torchvision
+import torchvision.datasets as dset
+import torchvision.transforms as transforms
+from torch.utils.data import DataLoader, Dataset
+import matplotlib.pyplot as plt
+import torchvision.utils
 import numpy as np
-import pickle
-import json
-
-from skimage.feature import hog
-from skimage import io
-from skimage import transform
-
-from sklearn.svm import SVC
-from sklearn.model_selection import KFold
-
-
-def CrossValidation(xTrain, yTrain):
-    times = 1
-    nSplit = 10
-    TrainAcc = 0
-    TestAcc = 0
-    for t in range(times):
-        state = np.random.get_state()
-        np.random.shuffle(xTrain)
-        np.random.set_state(state)
-        np.random.shuffle(yTrain)
-        kf = KFold(n_splits=nSplit)
-        cnt = 0
-        for train_index, test_index in kf.split(xTrain):
-            x_train, x_test = xTrain[train_index], xTrain[test_index]
-            y_train, y_test = yTrain[train_index], yTrain[test_index]
-            clf = SVC()
-            clf.fit(x_train, y_train)
-
-            yPredict = clf.predict(x_train)
-            acc = (yPredict == y_train).sum() / y_train.size
-            TrainAcc += acc
-
-            yPredict = clf.predict(x_test)
-            acc = (yPredict == y_test).sum() / y_test.size
-            TestAcc += acc
-            print(acc)
-
-    TrainAcc /= (nSplit * times)
-    TestAcc /= (nSplit * times)
-    print('Train acc is {:.4f}'.format(TrainAcc))
-    print('Test acc is {:.4f}'.format(TestAcc))
+import random
+from PIL import Image
+import torch
+from torch.autograd import Variable
+import PIL.ImageOps
+import torch.nn as nn
+from torch import optim
+import torch.nn.functional as F
 
 
-basicPath = "..\\..\\data\\"
-trainPath = "..\\..\\data\\Classification\\Data\\Train"
-# testPath = os.path.join(basicPath, "Classification\\DataFewShot\\Test")
-hogTrainPath = "..\\task3\\hog\\Train"
-hogTestPath = "..\\task3\\hog\\Test"
-modelPath = "..\\task3\\model.pickle"
-predPath = "..\\..\\data\\Classification\\DataFewShot\\pred.json"
+class Config():
+    training_dir = ".\\Train"
+    testing_dir = ".\\Test"
+    train_batch_size = 4
+    train_number_epochs = 10
 
-# 标志位
-extracted = 0
-trained = 0
 
-orientations = 9
-pixels_per_cell = (8, 8)
-cells_per_block = (8, 8)
-hogLength = orientations * cells_per_block[0] * cells_per_block[1]
-classList = ['i2', 'i4', 'i5', 'io', 'ip', 'p11', 'p23', 'p26', 'p5', 'pl30',
-             'pl40', 'pl5', 'pl50', 'pl60', 'pl80', 'pn', 'pne', 'po', 'w57']
+class SiameseNetworkDataset(Dataset):
 
-# 提取hog特征
-if not extracted:
-    if not os.path.exists(hogTrainPath):
-        os.mkdir(hogTrainPath)
+    def __init__(self, imageFolderDataset, transform=None, should_invert=True):
+        self.imageFolderDataset = imageFolderDataset
+        self.transform = transform
+        self.should_invert = should_invert
 
-    dirs = os.listdir(trainPath)
-    index = np.zeros(len(dirs))
-    cnt = 0
-    for d in dirs:
-        classPath = os.path.join(trainPath, d)
-        images = os.listdir(classPath)
-        index[cnt] = np.random.randint(0, len(images)-1)
-        image = images[int(index[cnt])]
-        imagePath = os.path.join(classPath, image)
-        pic = io.imread(imagePath, as_gray=True)
-        pic = transform.resize(pic, (64, 64))
-        hogFeature = hog(pic, orientations=orientations,
-                         pixels_per_cell=pixels_per_cell,
-                         cells_per_block=cells_per_block,
-                         block_norm='L2',
-                         feature_vector=True)
-        Hog = hogFeature
-        featurePath = os.path.join(hogTrainPath, d)
-        np.save(featurePath, Hog)
-        cnt += 1
-    print("Successfully Extract HOG features to " + hogTrainPath)
+    def __getitem__(self, index):
+        img0_tuple = random.choice(self.imageFolderDataset.imgs)
+        # we need to make sure approx 50% of images are in the same class
+        # should_get_same_class = random.randint(0, 1)
+        # if should_get_same_class:
+        #     while True:
+        #         # keep looping till the same class image is found
+        #         img1_tuple = random.choice(self.imageFolderDataset.imgs)
+        #         if img0_tuple[1] == img1_tuple[1]:
+        #             break
+        # else:
+        #     while True:
+        #         # keep looping till a different class image is found
+        #
+        #         img1_tuple = random.choice(self.imageFolderDataset.imgs)
+        #         if img0_tuple[1] != img1_tuple[1]:
+        #             break
+        while True:
+            # keep looping till a different class image is found
+            img1_tuple = random.choice(self.imageFolderDataset.imgs)
+            if img0_tuple[1] != img1_tuple[1]:
+                break
 
-# 读取hog特征并开始训练
-if not trained:
-    xTrain = np.array([])
-    yTrain = np.array([])
-    files = os.listdir(hogTrainPath)
-    cnt = 0
-    for file in files:
-        filePath = os.path.join(hogTrainPath, file)
-        xTmp = np.load(filePath)
-        xTmp = xTmp[np.newaxis, :]
-        yTmp = cnt
-        if xTrain.size == 0:
-            xTrain = xTmp
-            yTrain = yTmp
-        else:
-            xTrain = np.append(xTrain, xTmp, axis=0)
-            yTrain = np.append(yTrain, yTmp)
-        cnt += 1
-    print("Number of samples: ", xTrain.shape[0])
-    clf = SVC()
-    clf.fit(xTrain, yTrain)
-    with open(modelPath, 'wb') as outFile:
-        pickle.dump(clf, outFile)
-    print("Trained model is saved to " + modelPath)
-else:
-    # with open(modelPath, 'rb') as inFile:
-    #     clf = pickle.load(inFile)
-    clf = np.load(modelPath, allow_pickle=True)
-    print("Successfully load model from " + modelPath)
+        img0 = Image.open(img0_tuple[0])
+        img1 = Image.open(img1_tuple[0])
+        img0 = img0.convert("L")
+        img1 = img1.convert("L")
 
-# 进行测试并输出结果
-if not os.path.exists(hogTestPath):
-    os.mkdir(hogTestPath)
-dirs = os.listdir(trainPath)
-count = 0
-xTest = np.array([])
-yTest = np.array([])
-yPred = np.array([])
-for d in dirs:
-    classPath = os.path.join(trainPath, d)
-    images = os.listdir(classPath)
-    cnt = 0
-    for image in images:
-        if cnt != index[count]:
-            imagePath = os.path.join(classPath, image)
-            pic = io.imread(imagePath, as_gray=True)
-            pic = transform.resize(pic, (64, 64))
-            hogFeature = hog(pic, orientations=orientations,
-                             pixels_per_cell=pixels_per_cell,
-                             cells_per_block=cells_per_block,
-                             block_norm='L2',
-                             feature_vector=True)
-            tmp = int(clf.predict(hogFeature.reshape(1, -1)))
-            if xTest.size == 0:
-                xTest = hogFeature
-                yTest = count
-                yPred = tmp
-            else:
-                xTest = np.append(xTest, hogFeature, axis=0)
-                yTest = np.append(yTest, count)
-                yPred = np.append(yPred, tmp)
-        cnt += 1
-    count += 1
-    # print(d)
-np.save(os.path.join(hogTestPath, "test"), xTest)
+        if self.should_invert:
+            img0 = PIL.ImageOps.invert(img0)
+            img1 = PIL.ImageOps.invert(img1)
 
-print("Number of tests: ", xTest.shape[0])
-print("Successfully Extract HOG features to " + hogTestPath)
+        if self.transform is not None:
+            img0 = self.transform(img0)
+            img1 = self.transform(img1)
 
-# with open(predPath, 'w') as outFile:
-#     json.dump(yPred, outFile)
-# print("Save predictions to " + predPath)
+        return img0, img1, torch.from_numpy(np.array([int(img1_tuple[1] != img0_tuple[1])], dtype=np.float32))
 
-count = (yTest == yPred)
-acc = np.sum(count) / count.size
-print("accuracy: ", acc)
+    def __len__(self):
+        return len(self.imageFolderDataset.imgs)
 
-# CrossValidation(xTrain, yTrain)
+
+class SiameseNetwork(nn.Module):
+    def __init__(self):
+        super(SiameseNetwork, self).__init__()
+        self.cnn1 = nn.Sequential(
+            nn.ReflectionPad2d(1),
+            nn.Conv2d(1, 4, kernel_size=3),
+            nn.ReLU(inplace=True),
+            nn.BatchNorm2d(4),
+            nn.Dropout2d(p=.2),
+
+            nn.ReflectionPad2d(1),
+            nn.Conv2d(4, 8, kernel_size=3),
+            nn.ReLU(inplace=True),
+            nn.BatchNorm2d(8),
+            nn.Dropout2d(p=.2),
+
+            nn.ReflectionPad2d(1),
+            nn.Conv2d(8, 8, kernel_size=3),
+            nn.ReLU(inplace=True),
+            nn.BatchNorm2d(8),
+            nn.Dropout2d(p=.2),
+        )
+
+        self.fc1 = nn.Sequential(
+            nn.Linear(8 * 100 * 100, 500),
+            nn.ReLU(inplace=True),
+
+            nn.Linear(500, 500),
+            nn.ReLU(inplace=True),
+
+            nn.Linear(500, 5)
+        )
+
+    def forward_once(self, x):
+        output = self.cnn1(x)
+        output = output.view(output.size()[0], -1)
+        output = self.fc1(output)
+        return output
+
+    def forward(self, input1, input2):
+        output1 = self.forward_once(input1)
+        output2 = self.forward_once(input2)
+        return output1, output2
+
+
+class ContrastiveLoss(torch.nn.Module):
+    """
+    Contrastive loss function.
+    Based on: http://yann.lecun.com/exdb/publis/pdf/hadsell-chopra-lecun-06.pdf
+    """
+
+    def __init__(self, margin=2.0):
+        super(ContrastiveLoss, self).__init__()
+        self.margin = margin
+
+    def forward(self, output1, output2, label):
+        euclidean_distance = F.pairwise_distance(output1, output2, keepdim=True)
+        loss_contrastive = torch.mean((1 - label) * torch.pow(euclidean_distance, 2) +
+                                      (label) * torch.pow(torch.clamp(self.margin - euclidean_distance, min=0.0), 2))
+
+        return loss_contrastive
+
+
+folder_dataset = dset.ImageFolder(root=Config.training_dir)
+
+siamese_dataset = SiameseNetworkDataset(imageFolderDataset=folder_dataset,
+                                        transform=transforms.ToTensor(),
+                                        should_invert=False)
+train_dataloader = DataLoader(siamese_dataset,
+                              shuffle=True,
+                              num_workers=0,
+                              batch_size=Config.train_batch_size)
+
+net = SiameseNetwork()
+# net = SiameseNetwork().cuda()
+criterion = ContrastiveLoss()
+optimizer = optim.Adam(net.parameters(), lr=0.0005)
+
+counter = []
+loss_history = []
+iteration_number = 0
+
+for epoch in range(0, Config.train_number_epochs):
+    for i, data in enumerate(train_dataloader, 0):
+        img0, img1, label = data
+        # img0, img1, label = img0.cuda(), img1.cuda(), label.cuda()
+        optimizer.zero_grad()
+        output1, output2 = net(img0, img1)
+        loss_contrastive = criterion(output1, output2, label)
+        loss_contrastive.backward()
+        optimizer.step()
+        if i % 10 == 0:
+            print("Epoch number {}\n Current loss {}\n".format(epoch, loss_contrastive.item()))
+            iteration_number += 10
+            counter.append(iteration_number)
+            loss_history.append(loss_contrastive.item())
