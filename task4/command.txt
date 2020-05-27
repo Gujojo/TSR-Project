@@ -1,0 +1,54 @@
+10.20.96.8
+tsinghuaee207
+123456
+ssh c4130-019
+module load cuda10.1
+nvidia-smi
+019-3
+cp /home/ass02/Software/Miniconda3-latest-Linux-x86_64.sh ~/
+sh Miniconda3-latest-Linux-x86_64.sh
+
+vim ~/.bashrc
+vim ~/.condarc
+module rm cuda10.1
+export CUDA_ROOT=/home/ass01/public/cuda
+export LD_LIBRARY_PATH=$CUDA_ROOT/lib64:$LD_LIBRARY_PATH
+export PATH=$CUDE_ROOT/bin:$PATH
+
+conda create -n Gujojo python=3.7
+conda activate Gujojo
+
+conda install pytorch torchvision cudatoolkit=10.0 -c pytorch
+conda install matplotlib asynctest codecov flake8 isort pytest pytest-cov pytest-runner yapf pyyaml opencv
+conda install pycocotools addict terminaltables xdoctest -c conda-forge
+conda install pillow=6.2.2 -c http://conda.anaconda.org/scw
+conda install mmcv -c http://conda.anaconda.org/silverpond
+
+vim miniconda3/envs/Gujojo/lib/python3.7/site-packages/mmcv-0.4.0-py3.7.egg-info/requires.txt
+mmcv-0.5.5-py3.7.egg-info
+
+git clone http://github.com/open-mmlab/mmdetection.git
+cd mmdetection
+python setup.py develop
+
+cp -r ../ass02/Datasets/image_exp Detection
+
+python split_train_set.py
+python temp2coco.py
+
+
+mkdir mask_face_det
+cd mask_face_det
+mkdir config
+cp ../mmdetection/config/faster_rcnn_r50_fpn_1x.py ./config
+
+python train.py ./config/faster_rcnn_r50_fpn_1x.py
+CUDA_VISIBLE_DEVICES=3 python train.py ./config/faster_rcnn_r50_fpn_1x.py
+
+tmux
+conda activate Gujojo
+CUDA_VISIBLE_DEVICES=3 python train.py ./config/faster_rcnn_r50_fpn_1x.py
+
+ctrl+B D
+tmux a -t 1
+

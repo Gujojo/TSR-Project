@@ -7,9 +7,9 @@ import math
 
 def temp2coco():
     basicPath = os.sys.path[0]
-    trainPath = os.path.join(basicPath, "Detection\\train")
-    valPath = os.path.join(basicPath, "Detection\\val")
-    annoPath = os.path.join(basicPath, "Detection\\train_annotations.json")
+    trainPath = os.path.join(basicPath, "train")
+    valPath = os.path.join(basicPath, "val")
+    annoPath = os.path.join(basicPath, "train_annotations.json")
 
     classList = ['i2', 'i4', 'i5', 'io', 'ip', 'p11', 'p23', 'p26', 'p5', 'pl30',
                  'pl40', 'pl5', 'pl50', 'pl60', 'pl80', 'pn', 'pne', 'po', 'w57']
@@ -23,8 +23,8 @@ def temp2coco():
     with open(annoPath, 'r') as f:
         anno = json.load(f)
 
-    train_outfile = os.path.join(basicPath, "train.json ")
-    val_outfile = os.path.join(basicPath, "val.json ")
+    train_outfile = os.path.join(basicPath, "train.json")
+    val_outfile = os.path.join(basicPath, "val.json")
 
     train_coco = {}
     train_coco['info'] = "spytensor created"
@@ -54,7 +54,7 @@ def temp2coco():
         img["height"] = 2048
         img["width"] = 2048
         img["id"] = anno['imgs'][key]['id']
-        img["file_name"] = anno['imgs'][key]['path']
+        img["file_name"] = anno['imgs'][key]['path'][6:]
 
         temp = str(key) + '.jpg'
         if temp in train_dirs:
@@ -63,14 +63,16 @@ def temp2coco():
                 target = anno['imgs'][key]['objects'][j]
                 obj = {}
                 obj['id'] = sum_train
-                obj['image_id'] = key
+                obj['image_id'] = int(key)
                 obj['category_id'] = class2id[target['category']]
                 obj['segementation'] = []
 
                 if 'ellipse_org' in target:
+                    seg_temp = []
                     for v in target['ellipse_org']:
-                        obj['segementation'].append(v[0])
-                        obj['segementation'].append(v[1])
+                        seg_temp.append(v[0])
+                        seg_temp.append(v[1])
+                    obj['segementation'].append(seg_temp)
 
                 obj['bbox'] = [math.floor(target['bbox']['xmin'])]
                 obj['bbox'].append(math.floor(target['bbox']['ymin']))
@@ -90,14 +92,16 @@ def temp2coco():
                 target = anno['imgs'][key]['objects'][j]
                 obj = {}
                 obj['id'] = sum_val
-                obj['image_id'] = key
+                obj['image_id'] = int(key)
                 obj['category_id'] = class2id[target['category']]
                 obj['segementation'] = []
 
                 if 'ellipse_org' in target:
+                    seg_temp = []
                     for v in target['ellipse_org']:
-                        obj['segementation'].append(v[0])
-                        obj['segementation'].append(v[1])
+                        seg_temp.append(v[0])
+                        seg_temp.append(v[1])
+                    obj['segementation'].append(seg_temp)
 
                 obj['bbox'] = [math.floor(target['bbox']['xmin'])]
                 obj['bbox'].append(math.floor(target['bbox']['ymin']))
